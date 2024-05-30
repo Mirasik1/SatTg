@@ -1,0 +1,6 @@
+api_key.py
+venv
+__pycache__
+.idea
+questions.db
+users.db
