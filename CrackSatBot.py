@@ -154,6 +154,7 @@ def send_stats_pie_chart(message, stats, section):
     else:
         bot.send_message(message.chat.id, "Ошибка при создании графика статистики.")
 
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith('discuss') or call.data.startswith('skip'))
 def handle_discussion_or_skip(call):
     if call.data.startswith('skip'):
@@ -162,11 +163,20 @@ def handle_discussion_or_skip(call):
     elif call.data.startswith('discuss'):
         question_id = call.data.split(":")[1]
         user_answer = call.data.split(":")[2]
+
+        # Retrieve question including rationale
+        question = func.get_question_by_id(question_id)
+        print(question)
+        if question:
+            rationale = question.rationale
+            if rationale:
+                bot.send_message(call.message.chat.id, f"Разбор вопроса:\n{rationale}")
+            else:
+                bot.send_message(call.message.chat.id, "Рассуждение по этому вопросу отсутствует.")
+        else:
+            bot.send_message(call.message.chat.id, "Вопрос не найден.")
+
         bot.set_state(call.from_user.id, Allstates.analyzing, call.message.chat.id)
-        bot.send_message(call.message.chat.id, "Напишите дополнительные вопросы к заданию")
-        with bot.retrieve_data(call.from_user.id, call.message.chat.id) as data:
-            data['question_id'] = question_id
-            data['user_answer'] = user_answer
 
 
 @bot.callback_query_handler(func=lambda call: True)

@@ -275,3 +275,9 @@ def get_random_question_by_section(section, db_name='questions.db'):
                     rationale=row[6]
                 )
             return None
+def get_rationale_by_question_id(question_id, db_name='questions.db'):
+    # Retrieve the full question details including rationale
+    question = get_question_by_id(question_id, db_name)
+    if question:
+        return question.rationale
+    return None
