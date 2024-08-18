@@ -9,28 +9,6 @@ from io import BytesIO
 import matplotlib
 matplotlib.use('Agg')
 
-
-def is_user_registered(telegram_id, db_name='users.db'):
-    with sqlite3.connect(db_name) as conn:
-        with closing(conn.cursor()) as cursor:
-            cursor.execute('SELECT name, surname FROM users WHERE telegram_id = ?', (telegram_id,))
-            user = cursor.fetchone()
-            return user
-def get_random_question(db_name='questions.db'):
-    with sqlite3.connect(db_name) as conn:
-        with closing(conn.cursor()) as cursor:
-            cursor.execute('SELECT * FROM questions ORDER BY RANDOM() LIMIT 1')
-            row = cursor.fetchone()
-            if row:
-                return Question(
-                    question_id=row[1],
-                    question_type=row[2],
-                    text=row[3],
-                    answer_choices=eval(row[4]),  # Преобразуем строку обратно в словарь
-                    correct_answer=row[5],
-                    rationale=row[6]
-                )
-            return None
 def create_user_database(db_name='users.db'):
     with sqlite3.connect(db_name) as conn:
         with closing(conn.cursor()) as cursor:
@@ -64,7 +42,35 @@ def create_user_database(db_name='users.db'):
                 FOREIGN KEY(section_id) REFERENCES sections(section_id)
             )
             ''')
+            # Новая таблица для мультиплеерных тестов
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS multiplayer_tests (
+                test_id INTEGER PRIMARY KEY,
+                creator_id INTEGER,
+                start_time TIMESTAMP,
+                end_time TIMESTAMP,
+                FOREIGN KEY(creator_id) REFERENCES users(user_id)
+            )
+            ''')
+            # Новая таблица для результатов мультиплеерных тестов
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS multiplayer_results (
+                result_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                test_id INTEGER,
+                user_id INTEGER,
+                score INTEGER,
+                FOREIGN KEY(test_id) REFERENCES multiplayer_tests(test_id),
+                FOREIGN KEY(user_id) REFERENCES users(user_id)
+            )
+            ''')
             conn.commit()
+
+def is_user_registered(telegram_id, db_name='users.db'):
+    with sqlite3.connect(db_name) as conn:
+        with closing(conn.cursor()) as cursor:
+            cursor.execute('SELECT name, surname FROM users WHERE telegram_id = ?', (telegram_id,))
+            user = cursor.fetchone()
+            return user
 
 def add_user(telegram_id, name, surname, db_name='users.db'):
     with sqlite3.connect(db_name) as conn:
@@ -107,7 +113,6 @@ def update_user_stats(telegram_id, section_name, total_questions, correct_answer
             ''', (user_id, section_id, total_questions, correct_answers, incorrect_answers))
             conn.commit()
 
-
 def add_section(section_name, db_name='users.db'):
     with sqlite3.connect(db_name) as conn:
         with closing(conn.cursor()) as cursor:
@@ -144,6 +149,7 @@ def get_user_stats(user_id, db_name='users.db'):
             ''', (user_id,))
             stats = cursor.fetchall()
             return stats
+
 def get_question_by_id(question_id, db_name='questions.db'):
     with sqlite3.connect(db_name) as conn:
         with closing(conn.cursor()) as cursor:
@@ -154,14 +160,13 @@ def get_question_by_id(question_id, db_name='questions.db'):
                     question_id=row[1],
                     question_type=row[2],
                     text=row[3],
-                    answer_choices=eval(row[4]),  # Преобразуем строку обратно в словарь
+                    answer_choices=eval(row[4]),
                     correct_answer=row[5],
                     rationale=row[6]
                 )
             return None
 
-
-def get_chatgpt_explanation(question, user_answer,user_add_info):
+def get_chatgpt_explanation(question, user_answer, user_add_info):
     prompt = (
         f"{user_add_info}"
         f"Разбери каждый вариант ответа"
@@ -173,31 +178,24 @@ def get_chatgpt_explanation(question, user_answer,user_add_info):
         f"Варианты ответов:{question.answer_choices}\n"
     )
 
-
-
-
     client = OpenAI(api_key=OPENAI_API_KEY)
 
     completion = client.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=[
-            {"role": "system",
-             "content": "Ты учитель по урокам САТ и ты мастерски знаешь каждый ответ"},
+            {"role": "system", "content": "Ты учитель по урокам САТ и ты мастерски знаешь каждый ответ"},
             {"role": "user", "content": prompt}
         ]
     )
 
     return completion.choices[0].message.content
 
-
 def generate_user_stats_pie_chart(stats, section):
     if not stats:
         return None
 
-    # Отключение интерактивного режима Matplotlib
     plt.ioff()
 
-    # Удаление подчеркиваний из section
     section = section.replace('_', ' ')
 
     df = pd.DataFrame(stats, columns=['Section', 'Total Questions', 'Correct Answers', 'Incorrect Answers'])
@@ -223,10 +221,8 @@ def generate_user_stats_pie_chart(stats, section):
     ax.axis('equal')
     ax.set_title(section, color='black', fontsize=10)
 
-    # Увеличение отступов для предотвращения обрезания текста
     plt.tight_layout()
 
-    # Сохранение в буфер
     buffer = BytesIO()
     plt.savefig(buffer, format='png', bbox_inches='tight')
     buffer.seek(0)
@@ -260,6 +256,7 @@ def get_user_stats_by_section(user_id, section, db_name='users.db'):
             ''', (user_id, section))
             stats = list(cursor.fetchall())
             return stats
+
 def get_random_question_by_section(section, db_name='questions.db'):
     with sqlite3.connect(db_name) as conn:
         with closing(conn.cursor()) as cursor:
@@ -275,9 +272,187 @@ def get_random_question_by_section(section, db_name='questions.db'):
                     rationale=row[6]
                 )
             return None
+
 def get_rationale_by_question_id(question_id, db_name='questions.db'):
-    # Retrieve the full question details including rationale
     question = get_question_by_id(question_id, db_name)
     if question:
         return question.rationale
     return None
+
+# Новые функции для поддержки мультиплеерного режима
+
+def create_multiplayer_test(creator_id, db_name='users.db'):
+    with sqlite3.connect(db_name) as conn:
+        with closing(conn.cursor()) as cursor:
+            cursor.execute('''
+            INSERT INTO multiplayer_tests (creator_id, start_time)
+            VALUES (?, CURRENT_TIMESTAMP)
+            ''', (creator_id,))
+            conn.commit()
+            return cursor.lastrowid
+
+def end_multiplayer_test(test_id, db_name='users.db'):
+    with sqlite3.connect(db_name) as conn:
+        with closing(conn.cursor()) as cursor:
+            cursor.execute('''
+            UPDATE multiplayer_tests
+            SET end_time = CURRENT_TIMESTAMP
+            WHERE test_id = ?
+            ''', (test_id,))
+            conn.commit()
+
+def add_multiplayer_result(test_id, user_id, score, db_name='users.db'):
+    with sqlite3.connect(db_name) as conn:
+        with closing(conn.cursor()) as cursor:
+            cursor.execute('''
+            INSERT INTO multiplayer_results (test_id, user_id, score)
+            VALUES (?, ?, ?)
+            ''', (test_id, user_id, score))
+            conn.commit()
+
+def get_multiplayer_results(test_id, db_name='users.db'):
+    with sqlite3.connect(db_name) as conn:
+        with closing(conn.cursor()) as cursor:
+            cursor.execute('''
+            SELECT users.name, users.surname, multiplayer_results.score
+            FROM multiplayer_results
+            JOIN users ON multiplayer_results.user_id = users.user_id
+            WHERE multiplayer_results.test_id = ?
+            ORDER BY multiplayer_results.score DESC
+            ''', (test_id,))
+            return cursor.fetchall()
+
+def get_user_multiplayer_history(user_id, db_name='users.db'):
+    with sqlite3.connect(db_name) as conn:
+        with closing(conn.cursor()) as cursor:
+            cursor.execute('''
+            SELECT multiplayer_tests.test_id, multiplayer_tests.start_time, multiplayer_results.score
+            FROM multiplayer_results
+            JOIN multiplayer_tests ON multiplayer_results.test_id = multiplayer_tests.test_id
+            WHERE multiplayer_results.user_id = ?
+            ORDER BY multiplayer_tests.start_time DESC
+            ''', (user_id,))
+            return cursor.fetchall()
+
+# ... (предыдущий код остается без изменений)
+
+def generate_multiplayer_leaderboard(test_id, db_name='users.db'):
+    results = get_multiplayer_results(test_id)
+    
+    if not results:
+        return None
+
+    plt.ioff()
+
+    df = pd.DataFrame(results, columns=['Name', 'Surname', 'Score'])
+    df['Full Name'] = df['Name'] + ' ' + df['Surname']
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    bars = ax.barh(df['Full Name'], df['Score'])
+    ax.set_xlabel('Score')
+    ax.set_ylabel('Participants')
+    ax.set_title('Multiplayer Test Leaderboard')
+
+    for i, bar in enumerate(bars):
+        width = bar.get_width()
+        ax.text(width, bar.get_y() + bar.get_height()/2, f'{width}', 
+                ha='left', va='center')
+
+    plt.tight_layout()
+
+    buffer = BytesIO()
+    plt.savefig(buffer, format='png', bbox_inches='tight')
+    buffer.seek(0)
+    plt.close()
+
+    return buffer
+
+def get_active_multiplayer_tests(db_name='users.db'):
+    with sqlite3.connect(db_name) as conn:
+        with closing(conn.cursor()) as cursor:
+            cursor.execute('''
+            SELECT test_id, creator_id, start_time
+            FROM multiplayer_tests
+            WHERE end_time IS NULL
+            ORDER BY start_time DESC
+            ''')
+            return cursor.fetchall()
+
+def get_multiplayer_test_details(test_id, db_name='users.db'):
+    with sqlite3.connect(db_name) as conn:
+        with closing(conn.cursor()) as cursor:
+            cursor.execute('''
+            SELECT multiplayer_tests.test_id, users.name, users.surname, 
+                   multiplayer_tests.start_time, multiplayer_tests.end_time,
+                   COUNT(multiplayer_results.user_id) as participant_count
+            FROM multiplayer_tests
+            JOIN users ON multiplayer_tests.creator_id = users.user_id
+            LEFT JOIN multiplayer_results ON multiplayer_tests.test_id = multiplayer_results.test_id
+            WHERE multiplayer_tests.test_id = ?
+            GROUP BY multiplayer_tests.test_id
+            ''', (test_id,))
+            return cursor.fetchone()
+
+def add_user_to_multiplayer_test(test_id, user_id, db_name='users.db'):
+    with sqlite3.connect(db_name) as conn:
+        with closing(conn.cursor()) as cursor:
+            cursor.execute('''
+            INSERT OR IGNORE INTO multiplayer_results (test_id, user_id, score)
+            VALUES (?, ?, 0)
+            ''', (test_id, user_id))
+            conn.commit()
+            return cursor.rowcount > 0
+
+def update_multiplayer_score(test_id, user_id, score, db_name='users.db'):
+    with sqlite3.connect(db_name) as conn:
+        with closing(conn.cursor()) as cursor:
+            cursor.execute('''
+            UPDATE multiplayer_results
+            SET score = score + ?
+            WHERE test_id = ? AND user_id = ?
+            ''', (score, test_id, user_id))
+            conn.commit()
+            return cursor.rowcount > 0
+
+def get_user_current_multiplayer_test(user_id, db_name='users.db'):
+    with sqlite3.connect(db_name) as conn:
+        with closing(conn.cursor()) as cursor:
+            cursor.execute('''
+            SELECT multiplayer_tests.test_id
+            FROM multiplayer_tests
+            JOIN multiplayer_results ON multiplayer_tests.test_id = multiplayer_results.test_id
+            WHERE multiplayer_results.user_id = ? AND multiplayer_tests.end_time IS NULL
+            ORDER BY multiplayer_tests.start_time DESC
+            LIMIT 1
+            ''', (user_id,))
+            result = cursor.fetchone()
+            return result[0] if result else None
+
+def generate_user_multiplayer_history_chart(user_id, db_name='users.db'):
+    history = get_user_multiplayer_history(user_id)
+    
+    if not history:
+        return None
+
+    plt.ioff()
+
+    df = pd.DataFrame(history, columns=['Test ID', 'Date', 'Score'])
+    df['Date'] = pd.to_datetime(df['Date'])
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    ax.plot(df['Date'], df['Score'], marker='o')
+    ax.set_xlabel('Date')
+    ax.set_ylabel('Score')
+    ax.set_title('User Multiplayer Test History')
+
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+
+    buffer = BytesIO()
+    plt.savefig(buffer, format='png', bbox_inches='tight')
+    buffer.seek(0)
+    plt.close()
+
+    return buffer

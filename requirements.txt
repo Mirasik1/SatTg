@@ -1,0 +1,47 @@
+# Telegram Bot API
+pyTelegramBotAPI==4.12.0
+
+# Database
+# sqlite3 is part of Python's standard library, so no need to include it here
+
+# Data processing and visualization
+pandas==2.0.3
+matplotlib==3.7.2
+
+# OpenAI API
+openai==0.27.8
+
+# PDF processing
+pdfminer.six==20221105
+
+# Other utilities
+python-dotenv==1.0.0
+requests==2.31.0
+
+# Time zone handling
+pytz==2023.3
+
+# Image processing
+Pillow==10.0.0
+
+# Natural Language Processing (if needed)
+nltk==3.8.1
+
+# Progress bars (optional, but useful for long-running processes)
+tqdm==4.65.0
+
+# Async support (if you decide to use it in the future)
+aiohttp==3.8.5
+
+# Testing
+pytest==7.4.0
+
+# Linting and formatting
+flake8==6.1.0
+black==23.7.0
+
+# Type checking
+mypy==1.4.1
+
+# Documentation
+Sphinx==7.1.2
