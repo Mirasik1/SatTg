@@ -26,30 +26,43 @@ def get_random_questions_from_section(section, count, db_name="questions.db"):
                 (section, count),
             )
             rows = cursor.fetchall()
-            return [
-                Question(
+            questions = []
+            for row in rows:
+                answer_choices = row[4]
+                if not answer_choices:
+                    answer_choices = {}
+                else:
+                    try:
+                        answer_choices = eval(answer_choices)
+                    except SyntaxError:
+                        print(f"Ошибка синтаксиса для вопроса с ID {row[1]}")
+                        continue  # Пропускаем некорректную запись
+
+                question = Question(
                     question_id=row[1],
                     question_type=row[2],
                     text=row[3],
-                    answer_choices=eval(row[4]),
+                    answer_choices=answer_choices,
                     correct_answer=row[5],
                     rationale=row[6],
                 )
-                for row in rows
-            ]
+                questions.append(question)
+            return questions
 
 
 def generate_sat_test(db_name="questions.db", total_questions=27):
     question_counts = count_questions_per_section(db_name)
 
     sat_sections = [
-        ("Words_in_Context", 2, 4),
-        ("Text_Structure", 2, 3),
-        ("Quantitative_Reasoning", 3, 5),
-        ("Inference", 2, 4),
-        ("Synthesis", 2, 3),
-        ("Command_of_Evidence", 3, 5),
-        ("Words_in_Context_Results", 2, 4),
+        ("Boundaries", 2, 4),
+        ("Central Ideas and Details", 2, 3),
+        ("Command of Evidence", 3, 5),
+        ("Cross Text Connections", 2, 4),
+        ("Form Structure and Sense", 2, 3),
+        ("Inference", 3, 5),
+        ("Text Structure and Purpose", 2, 4),
+        ("Transitions", 2, 4),
+        ("Words in Context", 2, 4)
     ]
 
     test_questions = []
@@ -57,7 +70,11 @@ def generate_sat_test(db_name="questions.db", total_questions=27):
 
     for i, (section, min_count, max_count) in enumerate(sat_sections):
         available_count = question_counts.get(section, 0)
-        if i == len(sat_sections) - 1:  # Last section
+        if available_count < min_count:
+            print(f"Недостаточно вопросов в разделе {section}. Требуется минимум {min_count}, доступно {available_count}.")
+            continue
+
+        if i == len(sat_sections) - 1:  # Последний раздел
             count = min(remaining_questions, available_count, max_count)
         else:
             count = min(
@@ -79,6 +96,6 @@ def generate_sat_test(db_name="questions.db", total_questions=27):
 
 if __name__ == "__main__":
     test = generate_sat_test()
-    print(f"Generated test with {len(test)} questions:")
-    for i, question in enumerate(test, 1):
-        print(f"{i}. {question.question_type}: {question.question_id}")
+    for question in test:
+        print(question)
+
