@@ -105,6 +105,28 @@ def handle_discussion_or_skip(call):
             bot.send_message(call.message.chat.id, "Вопрос не найден.")
 
         bot.set_state(call.from_user.id, Allstates.testing, call.message.chat.id)
+@bot.callback_query_handler(func=lambda call: call.data.startswith('stats:'))
+def handle_stats_choice(call):
+    section = call.data.split(":")[1]
+    stats = func.get_user_stats_by_section(call.from_user.id, section)
+
+    if stats:
+        send_stats_pie_chart(call.message, stats, section)
+    else:
+        bot.send_message(call.message.chat.id, "Статистика не найдена.")
+
+
+def send_stats_pie_chart(message, stats, section):
+    buffer = func.generate_user_stats_pie_chart(stats, section)
+    section_ = section.replace('_', ' ')
+    response = "Ваша статистика:"
+    for section, total, correct, incorrect in stats:
+        response += f"\nСекция: {section_}\nВсего вопросов: {total}\nПравильных ответов: {correct}\nНеправильных ответов: {incorrect}\n"
+    if buffer:
+        buffer.seek(0)
+        bot.send_photo(message.chat.id, photo=buffer, caption=response)
+    else:
+        bot.send_message(message.chat.id, "Ошибка при создании графика статистики.")
 
 @bot.callback_query_handler(func=lambda call: True)
 def handle_query(call):
@@ -185,6 +207,41 @@ def handle_start(message):
                          "Добро пожаловать! Пожалуйста, зарегистрируйтесь, для начала введите ваше имя.")
         bot.set_state(message.from_user.id, Allstates.register_name, message.chat.id)
 
+
+@bot.message_handler(commands=['all_stats'])
+def send_stats(message):
+    stats = func.get_user_stats(message.from_user.id)
+    if stats:
+        # Генерация круговой диаграммы
+        buffer = func.generate_pie_chart(stats)
+
+        # Создание текста с деталями
+        response = "Ваша статистика:\n"
+        for section, total, correct, incorrect in stats:
+            response += (
+                f"\nСекция: {section}\n"
+                f"Всего вопросов: {total}\n"
+                f"Правильных ответов: {correct}\n"
+                f"Неправильных ответов: {incorrect}\n"
+            )
+
+        # Отправка круговой диаграммы
+        bot.send_photo(message.chat.id, photo=buffer, caption=response)
+    else:
+        bot.send_message(message.chat.id, "Статистика не найдена.")
+
+
+@bot.message_handler(commands=['stats'])
+def send_user_stats(message):
+    sections = func.get_question_sections()
+    text_section = func.get_cleaned_question_sections()
+    markup = types.InlineKeyboardMarkup(row_width=2)
+
+    buttons = [types.InlineKeyboardButton(text=text_section[i], callback_data=f"stats:{sections[i]}") for i in
+               range(len(sections))]
+    markup.add(*buttons)
+
+    bot.send_message(message.chat.id, "Выберите тип секции:", reply_markup=markup)
 
 
 bot.add_custom_filter(custom_filters.StateFilter(bot))

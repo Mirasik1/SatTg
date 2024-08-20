@@ -521,3 +521,22 @@ def create_user_progress_table(db_name='users.db'):
             )
             ''')
             conn.commit()
+def generate_pie_chart(stats):
+    correct_answers = sum([correct for _, _, correct, _ in stats])
+    incorrect_answers = sum([incorrect for _, _, _, incorrect in stats])
+
+    labels = 'Correct', 'Incorrect'
+    sizes = [correct_answers, incorrect_answers]
+    colors = ['#4CAF50', '#FF5733']
+    explode = (0.1, 0)  # немного отделить первый сегмент
+
+    plt.figure(figsize=(6, 6))
+    plt.pie(sizes, explode=explode, labels=labels, colors=colors, autopct='%1.1f%%', shadow=True, startangle=140)
+    plt.axis('equal')  # Сохранить соотношение сторон, чтобы круговая диаграмма была кругом
+
+    # Сохранение диаграммы в буфер
+    buffer = BytesIO()
+    plt.savefig(buffer, format='png')
+    plt.close()
+    buffer.seek(0)
+    return buffer
