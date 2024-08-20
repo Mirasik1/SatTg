@@ -157,7 +157,7 @@ def handle_discussion_or_skip(call):
         user_answer = call.data.split(":")[2]
 
         # Retrieve question including rationale
-        question = func.get_question_by_id(question_id)
+        question = func.get_question_by_question_id(question_id)
         print(question)
         if question:
             rationale = question.rationale
@@ -175,7 +175,7 @@ def handle_discussion_or_skip(call):
 def handle_query(call):
     question_id = call.data.split(":")[0]
     user_answer = call.data.split(":")[1]
-    question = func.get_question_by_id(question_id)
+    question = func.get_question_by_question_id(question_id)
 
     if question:
         if question.check_answer(user_answer):
@@ -231,7 +231,7 @@ def analyze_answer(message):
         question_id = data['question_id']
         user_answer = data['user_answer']
 
-        question = func.get_question_by_id(question_id)
+        question = func.get_question_by_question_id(question_id)
 
         if question:
             explanation = func.get_chatgpt_explanation(question, user_answer, message.text)

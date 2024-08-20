@@ -5,6 +5,7 @@ import time
 import os
 import sqlite3
 from contextlib import closing
+import random
 
 
 def create_database(db_name='questions.db'):
@@ -23,6 +24,46 @@ def create_database(db_name='questions.db'):
             )
             ''')
             conn.commit()
+
+
+def shuffle_questions(db_name='questions.db'):
+    with sqlite3.connect(db_name) as conn:
+        with closing(conn.cursor()) as cursor:
+            # Получаем все вопросы из базы данных
+            cursor.execute('SELECT * FROM questions')
+            questions = cursor.fetchall()
+
+            # Перемешиваем вопросы
+            random.shuffle(questions)
+
+            # Создаем временную таблицу для хранения перемешанных вопросов
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS shuffled_questions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                question_id TEXT,
+                question_type TEXT,
+                text TEXT,
+                answer_choices TEXT,
+                correct_answer TEXT,
+                rationale TEXT,
+                url TEXT
+            )
+            ''')
+
+            # Вставляем перемешанные вопросы в новую таблицу
+            cursor.executemany('''
+            INSERT INTO shuffled_questions (
+                question_id, question_type, text, answer_choices, correct_answer, rationale, url
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', [(q[1], q[2], q[3], q[4], q[5], q[6], q[7]) for q in questions])
+
+            # Удаляем старую таблицу и переименовываем новую
+            cursor.execute('DROP TABLE IF EXISTS questions')
+            cursor.execute('ALTER TABLE shuffled_questions RENAME TO questions')
+
+            conn.commit()
+
+    return "Done"
 
 def add_question_to_db(question, db_name='questions.db'):
     with sqlite3.connect(db_name) as conn:

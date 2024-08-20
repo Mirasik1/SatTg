@@ -1,14 +1,13 @@
 import sqlite3
 from contextlib import closing
 from sat import Question
-from openai import OpenAI
+
 from api_key import OPENAI_API_KEY
 import matplotlib.pyplot as plt
 import pandas as pd
 from io import BytesIO
 import matplotlib
 matplotlib.use('Agg')
-
 def create_user_database(db_name='users.db'):
     with sqlite3.connect(db_name) as conn:
         with closing(conn.cursor()) as cursor:
@@ -60,6 +59,14 @@ def create_user_database(db_name='users.db'):
                 user_id INTEGER,
                 score INTEGER,
                 FOREIGN KEY(test_id) REFERENCES multiplayer_tests(test_id),
+                FOREIGN KEY(user_id) REFERENCES users(user_id)
+            )
+            ''')
+            # Новая таблица для отслеживания прогресса пользователей
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_progress (
+                user_id INTEGER PRIMARY KEY,
+                current_question_id INTEGER DEFAULT 1,
                 FOREIGN KEY(user_id) REFERENCES users(user_id)
             )
             ''')
@@ -150,10 +157,26 @@ def get_user_stats(user_id, db_name='users.db'):
             stats = cursor.fetchall()
             return stats
 
-def get_question_by_id(question_id, db_name='questions.db'):
+def get_question_by_question_id(question_id, db_name='questions.db'):
     with sqlite3.connect(db_name) as conn:
         with closing(conn.cursor()) as cursor:
             cursor.execute('SELECT * FROM questions WHERE question_id = ?', (question_id,))
+            row = cursor.fetchone()
+            if row:
+                return Question(
+                    question_id=row[1],
+                    question_type=row[2],
+                    text=row[3],
+                    answer_choices=eval(row[4]),
+                    correct_answer=row[5],
+                    rationale=row[6]
+                )
+            return None
+
+def get_question_by_id(id, db_name='questions.db'):
+    with sqlite3.connect(db_name) as conn:
+        with closing(conn.cursor()) as cursor:
+            cursor.execute('SELECT * FROM questions WHERE id = ?', (id,))
             row = cursor.fetchone()
             if row:
                 return Question(
@@ -274,7 +297,7 @@ def get_random_question_by_section(section, db_name='questions.db'):
             return None
 
 def get_rationale_by_question_id(question_id, db_name='questions.db'):
-    question = get_question_by_id(question_id, db_name)
+    question = get_question_by_question_id(question_id, db_name)
     if question:
         return question.rationale
     return None
@@ -456,3 +479,45 @@ def generate_user_multiplayer_history_chart(user_id, db_name='users.db'):
     plt.close()
 
     return buffer
+def initialize_user_progress(user_id, db_name='users.db'):
+    with sqlite3.connect(db_name) as conn:
+        with closing(conn.cursor()) as cursor:
+            cursor.execute('''
+            INSERT OR IGNORE INTO user_progress (user_id, current_question_id)
+            VALUES (?, 1)
+            ''', (user_id,))
+            conn.commit()
+
+
+def update_current_question_id(user_id, question_id, db_name='users.db'):
+    with sqlite3.connect(db_name) as conn:
+        with closing(conn.cursor()) as cursor:
+            cursor.execute('''
+            INSERT INTO user_progress (user_id, current_question_id)
+            VALUES (?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                current_question_id = excluded.current_question_id
+            ''', (user_id, question_id))
+            conn.commit()
+
+def get_current_question_id(user_id, db_name='users.db'):
+    with sqlite3.connect(db_name) as conn:
+        with closing(conn.cursor()) as cursor:
+            cursor.execute('''
+            SELECT current_question_id FROM user_progress
+            WHERE user_id = ?
+            ''', (user_id,))
+            result = cursor.fetchone()
+            return result[0] if result else None
+
+def create_user_progress_table(db_name='users.db'):
+    with sqlite3.connect(db_name) as conn:
+        with closing(conn.cursor()) as cursor:
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_progress (
+                user_id INTEGER PRIMARY KEY,
+                current_question_id INTEGER,
+                FOREIGN KEY(user_id) REFERENCES users(user_id)
+            )
+            ''')
+            conn.commit()
