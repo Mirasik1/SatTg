@@ -4,8 +4,6 @@ from telebot.storage import StateMemoryStorage
 import telebot
 from telebot import types, custom_filters
 import func
-from sat_multiplayer import SATMultiplayerTest
-from sat_test_generator import generate_sat_test
 
 func.create_user_database()
 
@@ -13,7 +11,6 @@ DEFAULT_SECTION = 'Math'  # Секция по умолчанию
 
 state_storage = StateMemoryStorage()
 bot = telebot.TeleBot(TELEGRAM_BOT_KEY, state_storage=state_storage)
-sat_test = SATMultiplayerTest(bot)
 
 class Allstates(StatesGroup):
     register_name = State()
@@ -37,18 +34,18 @@ def handle_start(message):
                          "Добро пожаловать! Пожалуйста, зарегистрируйтесь, для начала введите ваше имя.")
         bot.set_state(message.from_user.id, Allstates.register_name, message.chat.id)
 
-
-@bot.message_handler(state=Allstates.register_surname)
-def register_surname(message):
+@bot.message_handler(state=Allstates.register_name)
+def register_name(message):
     with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
-        name = data['name']
-        surname = message.text
+
+        name = message.text
         telegram_id = message.from_user.id
-        func.add_user(telegram_id, name, surname)
+        func.add_user(telegram_id, name )
     bot.send_message(message.chat.id,
                      "Вы успешно зарегистрированы! Для получения вопроса введите команду /question.\n"
                      f"Секция по умолчанию: {DEFAULT_SECTION}. Вы можете сменить секцию командой /section.")
     bot.set_state(message.from_user.id, Allstates.testing, message.chat.id)
+
 
 
 @bot.message_handler(commands=['section'])
@@ -158,7 +155,6 @@ def handle_discussion_or_skip(call):
 
         # Retrieve question including rationale
         question = func.get_question_by_question_id(question_id)
-        print(question)
         if question:
             rationale = question.rationale
             if rationale:
@@ -184,7 +180,8 @@ def handle_query(call):
             markup = types.InlineKeyboardMarkup(row_width=4)
             buttons = [
                 types.InlineKeyboardButton(text=f"{key} ✅" if key == user_answer else key, callback_data="disabled") for
-                key in question.answer_choices.keys()]
+                key in question.answer_choices.keys()
+            ]
             markup.add(*buttons)
             bot.edit_message_text(response, call.message.chat.id, call.message.message_id, reply_markup=markup)
         else:
@@ -193,7 +190,8 @@ def handle_query(call):
             markup = types.InlineKeyboardMarkup(row_width=4)
             buttons = [
                 types.InlineKeyboardButton(text=f"{key} ❌" if key == user_answer else key, callback_data="disabled") for
-                key in question.answer_choices.keys()]
+                key in question.answer_choices.keys()
+            ]
             markup.add(*buttons)
             bot.edit_message_text(call.message.text, call.message.chat.id, call.message.message_id, reply_markup=markup)
 
@@ -234,7 +232,7 @@ def analyze_answer(message):
         question = func.get_question_by_question_id(question_id)
 
         if question:
-            explanation = func.get_chatgpt_explanation(question, user_answer, message.text)
+            explanation = func.get_rationale_by_question_id(question_id)
             bot.send_message(message.chat.id, explanation)
             bot.send_message(message.chat.id, "Давайте перейдем на следующий вопрос, нажмите /question")
         else:
@@ -259,41 +257,6 @@ def send_stats(message):
     else:
         bot.send_message(message.chat.id, "Статистика не найдена.")
 
-
-@bot.message_handler(commands=['create_test'])
-def handle_create_test(message):
-    test_id = sat_test.create_test(message.from_user.id)
-    bot.reply_to(message, f"Тест создан! ID теста: {test_id}. Отправьте этот ID друзьям, чтобы они могли присоединиться.")
-
-@bot.message_handler(commands=['join_test'])
-def handle_join_test(message):
-    args = message.text.split()
-    if len(args) != 2:
-        bot.reply_to(message, "Использование: /join_test <test_id>")
-        return
-    test_id = int(args[1])
-    if sat_test.join_test(message.from_user.id, test_id):
-        bot.reply_to(message, f"Вы присоединились к тесту {test_id}!")
-    else:
-        bot.reply_to(message, "Тест не найден.")
-
-@bot.message_handler(commands=['start_test'])
-def handle_start_test(message):
-    user_id = message.from_user.id
-    if user_id in sat_test.user_tests:
-        test_id = sat_test.user_tests[user_id]
-        if sat_test.start_test(test_id):
-            bot.reply_to(message, "Тест начался!")
-        else:
-            bot.reply_to(message, "Не удалось начать тест.")
-    else:
-        bot.reply_to(message, "Вы не присоединились ни к одному тесту.")
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith('answer:'))
-def handle_answer(call):
-    _, test_id, answer = call.data.split(':')
-    sat_test.handle_answer(call.from_user.id, int(test_id), answer)
-    bot.answer_callback_query(call.id)
 
 
 @bot.message_handler(commands=['help'])

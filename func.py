@@ -16,8 +16,7 @@ def create_user_database(db_name='users.db'):
             CREATE TABLE IF NOT EXISTS users (
                 user_id INTEGER PRIMARY KEY,
                 telegram_id INTEGER UNIQUE,
-                name TEXT,
-                surname TEXT
+                name TEXT
             )
             ''')
             # Таблица секций
@@ -75,17 +74,47 @@ def create_user_database(db_name='users.db'):
 def is_user_registered(telegram_id, db_name='users.db'):
     with sqlite3.connect(db_name) as conn:
         with closing(conn.cursor()) as cursor:
-            cursor.execute('SELECT name, surname FROM users WHERE telegram_id = ?', (telegram_id,))
+            cursor.execute('SELECT name FROM users WHERE telegram_id = ?', (telegram_id,))
             user = cursor.fetchone()
             return user
 
-def add_user(telegram_id, name, surname, db_name='users.db'):
+def clear_user_stats(user_id, db_name='users.db'):
+    with sqlite3.connect(db_name) as conn:
+        with closing(conn.cursor()) as cursor:
+            # Удаление статистики пользователя из таблицы user_stats
+            cursor.execute('''
+                DELETE FROM user_stats
+                WHERE user_id = ?
+            ''', (user_id,))
+
+
+
+            # Удаление записей мультиплеерных тестов, созданных пользователем
+            cursor.execute('''
+                DELETE FROM multiplayer_tests
+                WHERE creator_id = ?
+            ''', (user_id,))
+
+            # Удаление результатов мультиплеерных тестов пользователя
+            cursor.execute('''
+                DELETE FROM multiplayer_results
+                WHERE user_id = ?
+            ''', (user_id,))
+
+            # Удаление прогресса пользователя из таблицы user_progress
+            cursor.execute('''
+                DELETE FROM user_progress
+                WHERE user_id = ?
+            ''', (user_id,))
+
+            conn.commit()
+def add_user(telegram_id, name , db_name='users.db'):
     with sqlite3.connect(db_name) as conn:
         with closing(conn.cursor()) as cursor:
             cursor.execute('''
-            INSERT OR IGNORE INTO users (telegram_id, name, surname)
-            VALUES (?, ?, ?)
-            ''', (telegram_id, name, surname))
+            INSERT OR IGNORE INTO users (telegram_id, name )
+            VALUES (?, ?)
+            ''', (telegram_id, name))
             conn.commit()
 
 def update_user_stats(telegram_id, section_name, total_questions, correct_answers, incorrect_answers, db_name='users.db'):
