@@ -24,9 +24,11 @@ class Allstates(StatesGroup):
 def handle_start(message):
     user = func.is_user_registered(message.from_user.id)
     if user:
-        name, surname = user
+        name = str(user).strip("(),'")
+
+        print(name)
         bot.send_message(message.chat.id,
-                         f"Добро пожаловать обратно, {surname} {name}! Для получения вопроса введите команду /question.\n"
+                         f"Добро пожаловать обратно, {name}! Для получения вопроса введите команду /question.\n"
                          f"Секция по умолчанию: {DEFAULT_SECTION}. Вы можете сменить секцию командой /section.")
         bot.set_state(message.from_user.id, Allstates.testing, message.chat.id)
     else:
